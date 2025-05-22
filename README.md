@@ -3,7 +3,7 @@ This project simulates a local ring network where machines communicate using a t
 Each machine in the ring can send messages only when it holds the token, 
 ensuring orderly communication and collision-free transmission. 
 
-## Requisitos
+## 📝Requirements
 
 - Python 3.7+
 - Pacotes Python listados em `requirements.txt`
