@@ -6,9 +6,12 @@ import random
 import crcmod
 import json
 from typing import Dict, Optional
+import sys
 
 class RingNode:
+    
     def __init__(self, config_file: str):
+        
         self.config = self._load_config(config_file)
         self.message_queue = queue.Queue(maxsize=10)
         self.token_timeout = 5  # tempo máximo para o token voltar
@@ -21,7 +24,7 @@ class RingNode:
         
         # Configuração do socket UDP
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(('0.0.0.0', self.config['port']))
+        self.socket.bind(('0.0.0.0', self.config['next_port']))
         
         # Iniciar threads
         self.receive_thread = threading.Thread(target=self._receive_messages)
@@ -34,13 +37,14 @@ class RingNode:
 
     def _load_config(self, config_file: str) -> Dict:
         with open(config_file, 'r') as f:
-            line = f.readline().strip().split()
+            lines = f.readlines()
+            next_addr = lines[0].strip()
             return {
-                'next_ip': line[0].split(':')[0],
-                'next_port': int(line[0].split(':')[1]),
-                'nickname': line[1],
-                'token_time': int(line[2]),
-                'is_token_generator': line[3].lower() == 'true'
+                'next_ip': next_addr.split(':')[0],
+                'next_port': int(next_addr.split(':')[1]),
+                'nickname': lines[1].strip(),
+                'token_time': int(lines[2].strip()),
+                'is_token_generator': lines[3].strip().lower() == 'true'
             }
 
     def _generate_token(self):
@@ -147,8 +151,12 @@ class RingNode:
         self.token_control_thread.join()
 
 if __name__ == "__main__":
-    # Exemplo de uso
-    node = RingNode("config.txt")
+    if len(sys.argv) != 2:
+        print("Uso: python ring_network.py <arquivo_configuracao>")
+        sys.exit(1)
+        
+    config_file = sys.argv[1]
+    node = RingNode(config_file)
     
     try:
         while True:
