@@ -1,4 +1,4 @@
-# Rede em Anel - Trabalho Final
+# 💍TokenTrip: Simulating a UDP Ring Network
 
 Este projeto implementa uma rede em anel usando o protocolo UDP para comunicação entre os nós.
 
@@ -69,4 +69,10 @@ Durante a execução:
 - Apenas uma máquina deve ser configurada como geradora de token
 - O tempo do token deve ser configurado adequadamente para evitar problemas de sincronização
 - Para testar em uma única máquina, use diferentes portas para cada nó
-- Para broadcast, use "TODOS" como destino da mensagem 
+- Para broadcast, use "TODOS" como destino da mensagem
+
+## 🤝 Authors
+
+[Marcelo Augusto Felisberto Martins](https://github.com/MFelisberto)
+
+[Mateus Fritas Charloto](https://github.com/mateusfch)
