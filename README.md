@@ -1,6 +1,7 @@
 # 💍TokenTrip: Simulating a UDP Ring Network
-
-Este projeto implementa uma rede em anel usando o protocolo UDP para comunicação entre os nós.
+This project simulates a local ring network where machines communicate using a token-passing protocol over UDP. 
+Each machine in the ring can send messages only when it holds the token, 
+ensuring orderly communication and collision-free transmission. 
 
 ## Requisitos
 
