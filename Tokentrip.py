@@ -6,6 +6,7 @@ import random
 import binascii
 import json
 from typing import Optional, Tuple
+from datetime import datetime
 
 # Constants
 TOKEN_VALUE = "9000"
@@ -13,16 +14,35 @@ DATA_PACKET_VALUE = "7777"
 MAX_QUEUE_SIZE = 10
 BROADCAST_DESTINATION = "TODOS"
 
+def get_timestamp():
+    return datetime.now().strftime("%H:%M:%S")
+
 class TokenRingNode:
     def __init__(self, config_file: str):
         self.config = self._load_config(config_file)
         self.message_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
+        
+        # Extract port from next_node for binding
+        next_ip, next_port = self.config['next_node'].split(':')
+        self.next_port = int(next_port)
+        
+        # Create socket and bind to the port before the next node
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(('', 0))  # Bind to any available port
+        # Bind to the port that comes before the next node's port
+        bind_port = self.next_port - 1 if self.next_port > 6000 else 6002
+        self.socket.bind(('', bind_port))
+        print(f"\n[{get_timestamp()}] {'='*50}")
+        print(f"[{get_timestamp()}] Node {self.config['nickname']} initialized")
+        print(f"[{get_timestamp()}] Listening on port {bind_port}")
+        print(f"[{get_timestamp()}] Next node: {self.config['next_node']}")
+        print(f"[{get_timestamp()}] Token generator: {self.config['is_token_generator']}")
+        print(f"[{get_timestamp()}] {'='*50}\n")
+        
         self.running = True
         self.has_token = False
         self.last_token_time = 0
-        self.token_timeout = 10  # Default timeout in seconds
+        self.token_timeout = 100  # Default timeout in seconds
+        self.token_started = False
         
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from file."""
@@ -69,30 +89,40 @@ class TokenRingNode:
     
     def send_token(self):
         """Send the token to the next node."""
-        next_ip, next_port = self.config['next_node'].split(':')
-        self.socket.sendto(TOKEN_VALUE.encode(), (next_ip, int(next_port)))
-        self.has_token = False
-        print(f"[{self.config['nickname']}] Token sent to {next_ip}:{next_port}")
+        try:
+            next_ip, next_port = self.config['next_node'].split(':')
+            time.sleep(3)  # Adiciona um delay de 2 segundos antes de enviar o token
+            self.socket.sendto(TOKEN_VALUE.encode(), (next_ip, int(next_port)))
+            self.has_token = False
+            print(f"[{get_timestamp()}] TOKEN: Sent to {next_ip}:{next_port}")
+        except Exception as e:
+            print(f"[{get_timestamp()}] ERROR: Failed to send token - {e}")
     
     def handle_token(self):
         """Handle receiving the token."""
         self.has_token = True
         self.last_token_time = time.time()
+        print(f"[{get_timestamp()}] TOKEN: Received")
         
         if not self.message_queue.empty():
             # Get the next message from the queue
             destination, message = self.message_queue.get()
             packet = self.create_data_packet(destination, message)
             self.send_data_packet(packet)
+            # Não envia o token aqui - ele será enviado quando receber o ACK
         else:
-            # No messages to send, pass the token
+            # Se não tem mensagem para enviar, passa o token
+            time.sleep(self.config['token_time'])  # Wait for the configured time
             self.send_token()
     
     def send_data_packet(self, packet: str):
         """Send a data packet to the next node."""
-        next_ip, next_port = self.config['next_node'].split(':')
-        self.socket.sendto(packet.encode(), (next_ip, int(next_port)))
-        print(f"[{self.config['nickname']}] Data packet sent to {next_ip}:{next_port}")
+        try:
+            next_ip, next_port = self.config['next_node'].split(':')
+            self.socket.sendto(packet.encode(), (next_ip, int(next_port)))
+            print(f"[{get_timestamp()}] DATA: Sent to {next_ip}:{next_port}")
+        except Exception as e:
+            print(f"[{get_timestamp()}] ERROR: Failed to send data - {e}")
     
     def handle_data_packet(self, packet: str):
         """Handle receiving a data packet."""
@@ -110,20 +140,32 @@ class TokenRingNode:
             # Check if there's an error
             if calculated_crc != crc:
                 status = "NACK"
+                print(f"[{get_timestamp()}] DATA: Error detected in message from {origin}")
             else:
                 status = "ACK"
-                print(f"[{self.config['nickname']}] Received message from {origin}: {message}")
+                print(f"[{get_timestamp()}] MESSAGE: From {origin}: {message}")
+            
+            # Atualiza o status no pacote antes de reenviar
+            packet = f"{DATA_PACKET_VALUE}:{status};{origin};{destination};{crc};{message}"
         
         # If we're the origin
         if origin == self.config['nickname']:
             if status == "ACK":
-                print(f"[{self.config['nickname']}] Message successfully delivered")
+                print(f"[{get_timestamp()}] MESSAGE: Successfully delivered to {destination}")
+                # Só passa o token depois de receber o ACK
+                time.sleep(self.config['token_time'])
                 self.send_token()
             elif status == "NACK":
-                print(f"[{self.config['nickname']}] Message needs retransmission")
-                # Message will be retransmitted on next token
+                print(f"[{get_timestamp()}] MESSAGE: Needs retransmission to {destination}")
+                # Recoloca a mensagem na fila para retransmissão
+                self.message_queue.put((destination, message))
+                # Passa o token para tentar novamente
+                time.sleep(self.config['token_time'])
+                self.send_token()
             elif status == "naoexiste":
-                print(f"[{self.config['nickname']}] Destination not found")
+                print(f"[{get_timestamp()}] MESSAGE: Destination {destination} not found")
+                # Passa o token já que o destino não existe
+                time.sleep(self.config['token_time'])
                 self.send_token()
         else:
             # Forward the packet
@@ -136,33 +178,42 @@ class TokenRingNode:
         receive_thread.daemon = True
         receive_thread.start()
         
-        # If we're the token generator, create the first token
-        if self.config['is_token_generator']:
-            self.has_token = True
-            self.last_token_time = time.time()
-            self.send_token()
-        
         # Start token monitoring if we're the generator
         if self.config['is_token_generator']:
             monitor_thread = threading.Thread(target=self._monitor_token)
             monitor_thread.daemon = True
             monitor_thread.start()
         
+        print(f"\n[{get_timestamp()}] {'='*50}")
+        print(f"[{get_timestamp()}] Available commands:")
+        print(f"[{get_timestamp()}] - start (only for token generator)")
+        print(f"[{get_timestamp()}] - send <destination> <message>")
+        print(f"[{get_timestamp()}] - quit")
+        print(f"[{get_timestamp()}] {'='*50}\n")
+        
         # Main loop for user input
         while self.running:
             try:
-                command = input("Enter command (send <destination> <message> or quit): ")
+                command = input(f"[{self.config['nickname']}] > ")
                 if command.lower() == 'quit':
                     self.running = False
+                elif command.lower() == 'start' and self.config['is_token_generator'] and not self.token_started:
+                    print(f"[{get_timestamp()}] {'='*50}")
+                    print(f"[{get_timestamp()}] Starting token circulation...")
+                    print(f"[{get_timestamp()}] {'='*50}")
+                    self.token_started = True
+                    self.has_token = True
+                    self.last_token_time = time.time()
+                    self.send_token()
                 elif command.lower().startswith('send '):
                     parts = command.split(' ', 2)
                     if len(parts) == 3:
                         destination, message = parts[1], parts[2]
                         if self.message_queue.qsize() < MAX_QUEUE_SIZE:
                             self.message_queue.put((destination, message))
-                            print(f"[{self.config['nickname']}] Message queued for {destination}")
+                            print(f"[{get_timestamp()}] MESSAGE: Queued for {destination}")
                         else:
-                            print(f"[{self.config['nickname']}] Message queue is full")
+                            print(f"[{get_timestamp()}] ERROR: Message queue is full")
             except KeyboardInterrupt:
                 self.running = False
     
@@ -178,14 +229,18 @@ class TokenRingNode:
                 else:
                     self.handle_data_packet(packet)
             except Exception as e:
-                print(f"[{self.config['nickname']}] Error receiving packet: {e}")
+                if self.running:  # Only print error if we're still running
+                    print(f"[{get_timestamp()}] ERROR: Failed to receive packet - {e}")
     
     def _monitor_token(self):
         """Monitor token circulation for the token generator."""
         while self.running:
             time.sleep(1)
-            if time.time() - self.last_token_time > self.token_timeout:
-                print(f"[{self.config['nickname']}] Token timeout detected, generating new token")
+            if self.token_started and time.time() - self.last_token_time > self.token_timeout:
+                print(f"[{get_timestamp()}] {'='*50}")
+                print(f"[{get_timestamp()}] WARNING: Token timeout detected")
+                print(f"[{get_timestamp()}] Generating new token...")
+                print(f"[{get_timestamp()}] {'='*50}")
                 self.has_token = True
                 self.last_token_time = time.time()
                 self.send_token()
