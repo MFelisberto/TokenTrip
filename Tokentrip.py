@@ -8,7 +8,6 @@ import json
 from typing import Optional, Tuple
 from datetime import datetime
 
-# Constants
 TOKEN_VALUE = "9000"
 DATA_PACKET_VALUE = "7777"
 MAX_QUEUE_SIZE = 10
@@ -18,31 +17,35 @@ def get_timestamp():
     return datetime.now().strftime("%H:%M:%S")
 
 class TokenRingNode:
+
+    # constructor -> arquivo de config
     def __init__(self, config_file: str):
-        self.config = self._load_config(config_file)
-        self.message_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
         
-        # Extract port from next_node for binding
-        next_ip, next_port = self.config['next_node'].split(':')
-        self.next_port = int(next_port)
-        
-        # Create socket and bind to the port before the next node
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.config = self._load_config(config_file)                   # atrib config
+        self.message_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)       # atrib message_queue
+        self.next_port = int(self.config['next_node'].split(':')[1])   # atrib next_port
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # atrib socket
+        # cria o socket e faz bind na porta que vem antes da porta do próximo nó
+
         # Bind to the port that comes before the next node's port
+        # VER BEM ESSA PARTE, PQ 6000??
         bind_port = self.next_port - 1 if self.next_port > 6000 else 6002
         self.socket.bind(('', bind_port))
+
+        self.running = True        # atrib running
+        self.has_token = False     # atrib has_token
+        self.last_token_time = 0   # atrib last_token_time
+        self.token_timeout = 100   # atrib token_timeout
+        self.token_started = False # atrib token_started
+        
+        # prints de inicialização 
         print(f"\n[{get_timestamp()}] {'='*50}")
-        print(f"[{get_timestamp()}] Node {self.config['nickname']} initialized")
-        print(f"[{get_timestamp()}] Listening on port {bind_port}")
-        print(f"[{get_timestamp()}] Next node: {self.config['next_node']}")
-        print(f"[{get_timestamp()}] Token generator: {self.config['is_token_generator']}")
+        print(f"[{get_timestamp()}] Node {self.config['nickname']} inicializado")
+        print(f"[{get_timestamp()}] Escutando na porta: {bind_port}")
+        print(f"[{get_timestamp()}] Próximo node: {self.config['next_node']}")
+        print(f"[{get_timestamp()}] Gerador de token: {self.config['is_token_generator']}")
         print(f"[{get_timestamp()}] {'='*50}\n")
         
-        self.running = True
-        self.has_token = False
-        self.last_token_time = 0
-        self.token_timeout = 100  # Default timeout in seconds
-        self.token_started = False
         
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from file."""
@@ -245,8 +248,11 @@ class TokenRingNode:
                 self.last_token_time = time.time()
                 self.send_token()
 
+
+
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) != 2:
         print("Usage: python Tokentrip.py <config_file>")
         sys.exit(1)
