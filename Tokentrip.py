@@ -5,7 +5,7 @@ import time
 import random
 import binascii
 import json
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from datetime import datetime
 
 TOKEN_VALUE = "9000"
@@ -17,7 +17,7 @@ def get_timestamp():
     return datetime.now().strftime("%H:%M:%S")
 
 class TokenRingNode:
-    def __init__(self, config_file: str) -> None: 
+    def __init__(self, config_file: str): 
         """Construtor"""
         # ===== Atributos =====
         self.config = self.load_config(config_file)
@@ -45,7 +45,7 @@ class TokenRingNode:
         print("\n")
         
     
-    def load_config(self, config_file: str) -> dict:
+    def load_config(self, config_file: str) -> dict[str, Any]:
         """Carregar config do arquivo"""
         with open(config_file, 'r') as f:
             linhas = f.readlines()
@@ -58,24 +58,36 @@ class TokenRingNode:
     
     
     def calculate_crc32(self, data: str) -> str:
-        """Calculate CRC32 for the given data."""
+        """Calcula o CRC32 para os dados fornecidos"""
         return str(binascii.crc32(data.encode()))
     
+
     def inject_error(self, data: str, probability: float = 0.1) -> str:
-        """Randomly inject errors into the data with given probability."""
+        """Aleatoriamente injeta erros nos dados com a probabilidade fornecida"""
         if random.random() < probability:
-            # Randomly change one character in the data
+            # troca uma caracter aleatório
             pos = random.randint(0, len(data) - 1)
             data = data[:pos] + chr(ord(data[pos]) + 1) + data[pos + 1:]
         return data
     
+
     def create_data_packet(self, destination: str, message: str) -> str:
-        """Create a data packet with the specified format."""
-        data = f"{DATA_PACKET_VALUE}:naoexiste;{self.config['apelido']};{destination};{self.calculate_crc32(message)};{message}"
+        """Cria um pacote de dados com o formato especificado"""
+        
+        data = (
+            f"{DATA_PACKET_VALUE}:naoexiste;"
+            f"{self.config['apelido']};"
+            f"{destination};"
+            f"{self.calculate_crc32(message)};"
+            f"{message}"
+        )
+
         return self.inject_error(data)
     
+    
     def parse_data_packet(self, packet: str) -> Tuple[str, str, str, str, str, str]:
-        """Parse a data packet into its components."""
+        """Analisar um pacote de dados em seus componentes"""
+        
         try:
             parts = packet.split(':')
             if len(parts) != 2 or parts[0] != DATA_PACKET_VALUE:
