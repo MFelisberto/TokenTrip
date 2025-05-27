@@ -17,43 +17,40 @@ def get_timestamp():
     return datetime.now().strftime("%H:%M:%S")
 
 class TokenRingNode:
-
-    # constructor -> arquivo de config
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str) -> None:        
+        # ===== Atributos =====
+        self.config = self._load_config(config_file
+        self.message_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
+        self.next_port = int(self.config['next_node'].split(':')[1])
         
-        self.config = self._load_config(config_file)                   # atrib config
-        self.message_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)       # atrib message_queue
-        self.next_port = int(self.config['next_node'].split(':')[1])   # atrib next_port
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # atrib socket
-        # cria o socket e faz bind na porta que vem antes da porta do próximo nó
+        # socket -> bind na porta que vem antes da porta do proximo nó
+        # supondo que nao estamos usando nada reservado
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.bind(('', self.next_port - 1))
 
-        # Bind to the port that comes before the next node's port
-        # VER BEM ESSA PARTE, PQ 6000??
-        bind_port = self.next_port - 1 if self.next_port > 6000 else 6002
-        self.socket.bind(('', bind_port))
-
-        self.running = True        # atrib running
-        self.has_token = False     # atrib has_token
-        self.last_token_time = 0   # atrib last_token_time
-        self.token_timeout = 100   # atrib token_timeout
-        self.token_started = False # atrib token_started
+        self.running = True
+        self.has_token = False
+        self.last_token_time = 0
+        self.token_timeout = 100
+        self.token_started = False 
+        # =====================
         
-        # prints de inicialização 
-        print(f"\n[{get_timestamp()}] {'='*50}")
-        print(f"[{get_timestamp()}] Node {self.config['nickname']} inicializado")
+        print(f"[{get_timestamp()}] {'='*50}")
+        print(f"[{get_timestamp()}] Node {self.config['apelido']} inicializado")
         print(f"[{get_timestamp()}] Escutando na porta: {bind_port}")
         print(f"[{get_timestamp()}] Próximo node: {self.config['next_node']}")
         print(f"[{get_timestamp()}] Gerador de token: {self.config['is_token_generator']}")
-        print(f"[{get_timestamp()}] {'='*50}\n")
-        
-        
+        print(f"[{get_timestamp()}] {'='*50}")
+        print("\n")
+
+
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from file."""
         with open(config_file, 'r') as f:
             lines = f.readlines()
             return {
                 'next_node': lines[0].strip(),
-                'nickname': lines[1].strip(),
+                'apelido': lines[1].strip(),
                 'token_time': int(lines[2].strip()),
                 'is_token_generator': lines[3].strip().lower() == 'true'
             }
@@ -72,7 +69,7 @@ class TokenRingNode:
     
     def create_data_packet(self, destination: str, message: str) -> str:
         """Create a data packet with the specified format."""
-        data = f"{DATA_PACKET_VALUE}:naoexiste;{self.config['nickname']};{destination};{self.calculate_crc32(message)};{message}"
+        data = f"{DATA_PACKET_VALUE}:naoexiste;{self.config['apelido']};{destination};{self.calculate_crc32(message)};{message}"
         return self.inject_error(data)
     
     def parse_data_packet(self, packet: str) -> Tuple[str, str, str, str, str, str]:
@@ -136,7 +133,7 @@ class TokenRingNode:
         status, origin, destination, crc, message = parsed
         
         # If we're the destination
-        if destination == self.config['nickname'] or destination == BROADCAST_DESTINATION:
+        if destination == self.config['apelido'] or destination == BROADCAST_DESTINATION:
             # Recalculate CRC
             calculated_crc = self.calculate_crc32(message)
             
@@ -152,7 +149,7 @@ class TokenRingNode:
             packet = f"{DATA_PACKET_VALUE}:{status};{origin};{destination};{crc};{message}"
         
         # If we're the origin
-        if origin == self.config['nickname']:
+        if origin == self.config['apelido']:
             if status == "ACK":
                 print(f"[{get_timestamp()}] MESSAGE: Successfully delivered to {destination}")
                 # Só passa o token depois de receber o ACK
@@ -197,7 +194,7 @@ class TokenRingNode:
         # Main loop for user input
         while self.running:
             try:
-                command = input(f"[{self.config['nickname']}] > ")
+                command = input(f"[{self.config['apelido']}] > ")
                 if command.lower() == 'quit':
                     self.running = False
                 elif command.lower() == 'start' and self.config['is_token_generator'] and not self.token_started:
