@@ -17,9 +17,10 @@ def get_timestamp():
     return datetime.now().strftime("%H:%M:%S")
 
 class TokenRingNode:
-    def __init__(self, config_file: str) -> None:        
+    def __init__(self, config_file: str) -> None: 
+        """Construtor"""
         # ===== Atributos =====
-        self.config = self._load_config(config_file
+        self.config = self.load_config(config_file)
         self.message_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
         self.next_port = int(self.config['next_node'].split(':')[1])
         
@@ -37,23 +38,24 @@ class TokenRingNode:
         
         print(f"[{get_timestamp()}] {'='*50}")
         print(f"[{get_timestamp()}] Node {self.config['apelido']} inicializado")
-        print(f"[{get_timestamp()}] Escutando na porta: {bind_port}")
+        print(f"[{get_timestamp()}] Escutando na porta: {self.next_port - 1}")
         print(f"[{get_timestamp()}] Próximo node: {self.config['next_node']}")
         print(f"[{get_timestamp()}] Gerador de token: {self.config['is_token_generator']}")
         print(f"[{get_timestamp()}] {'='*50}")
         print("\n")
-
-
-    def _load_config(self, config_file: str) -> dict:
-        """Load configuration from file."""
+        
+    
+    def load_config(self, config_file: str) -> dict:
+        """Carregar config do arquivo"""
         with open(config_file, 'r') as f:
-            lines = f.readlines()
+            linhas = f.readlines()
             return {
-                'next_node': lines[0].strip(),
-                'apelido': lines[1].strip(),
-                'token_time': int(lines[2].strip()),
-                'is_token_generator': lines[3].strip().lower() == 'true'
+                'next_node': linhas[0].strip(),
+                'apelido': linhas[1].strip(),
+                'token_time': int(linhas[2].strip()),
+                'is_token_generator': linhas[3].strip().lower() == 'true'
             }
+    
     
     def calculate_crc32(self, data: str) -> str:
         """Calculate CRC32 for the given data."""
