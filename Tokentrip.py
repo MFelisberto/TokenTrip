@@ -207,75 +207,104 @@ class TokenRingNode:
         receive_thread.daemon = True
         receive_thread.start()
         
-        # Start token monitoring if we're the generator
+        # Começa a monitorar o token se for o gerador
+        # em outra thread
         if self.config['is_token_generator']:
             monitor_thread = threading.Thread(target=self._monitor_token)
             monitor_thread.daemon = True
             monitor_thread.start()
         
-        print(f"\n[{get_timestamp()}] {'='*50}")
-        print(f"[{get_timestamp()}] Available commands:")
-        print(f"[{get_timestamp()}] - start (only for token generator)")
-        print(f"[{get_timestamp()}] - send <destination> <message>")
+        print(f"[{get_timestamp()}] {'='*50}")
+        print(f"[{get_timestamp()}] Comandos disponiveis:")
+        print(f"[{get_timestamp()}] - start (apenas o gerador de token)")
+        print(f"[{get_timestamp()}] - send <destino> <menssagem>")
         print(f"[{get_timestamp()}] - quit")
-        print(f"[{get_timestamp()}] {'='*50}\n")
-        
-        # Main loop for user input
+        print(f"[{get_timestamp()}] {'='*50}")
+        print("\n")
+
+
+        # Loop principal para receber comandos do usuario
         while self.running:
+            
             try:
+                # linha de comando
                 command = input(f"[{self.config['apelido']}] > ")
+                
+                # quit
                 if command.lower() == 'quit':
                     self.running = False
+                
+                # start
                 elif command.lower() == 'start' and self.config['is_token_generator'] and not self.token_started:
                     print(f"[{get_timestamp()}] {'='*50}")
                     print(f"[{get_timestamp()}] Starting token circulation...")
                     print(f"[{get_timestamp()}] {'='*50}")
+                    
                     self.token_started = True
                     self.has_token = True
                     self.last_token_time = time.time()
                     self.send_token()
+                
+                # send <destination> <message>
                 elif command.lower().startswith('send '):
                     parts = command.split(' ', 2)
+                    
                     if len(parts) == 3:
                         destination, message = parts[1], parts[2]
+                        
                         if self.message_queue.qsize() < MAX_QUEUE_SIZE:
                             self.message_queue.put((destination, message))
-                            print(f"[{get_timestamp()}] MESSAGE: Queued for {destination}")
+                            print(f"[{get_timestamp()}] MESSAGE: na fila para {destination}")
                         else:
-                            print(f"[{get_timestamp()}] ERROR: Message queue is full")
+                            print(f"[{get_timestamp()}] ERROR: Fila de mensagens cheia (max {MAX_QUEUE_SIZE})")
             except KeyboardInterrupt:
                 self.running = False
     
     def _receive_loop(self):
-        """Main receive loop for handling incoming packets."""
+        """Loop principal para receber pacotes"""
+        
         while self.running:
+            
             try:
                 data, addr = self.socket.recvfrom(1024)
                 packet = data.decode()
                 
+                # se o pacote é o token
                 if packet == TOKEN_VALUE:
                     self.handle_token()
+                # se o pacote é um pacote de dados
                 else:
                     self.handle_data_packet(packet)
             except Exception as e:
-                if self.running:  # Only print error if we're still running
-                    print(f"[{get_timestamp()}] ERROR: Failed to receive packet - {e}")
+                if self.running:
+                    print(f"[{get_timestamp()}] ERROR: Falha ao recever o pacote - {e}")
     
+
     def _monitor_token(self):
-        """Monitor token circulation for the token generator."""
+        """Monitora a circulação do token para o gerador de token"""
+
+
         while self.running:
+            
             time.sleep(1)
+            
+            # Token iniciado
+            # mas o timeout para o token foi passado
+            # geramos um novo
             if self.token_started and time.time() - self.last_token_time > self.token_timeout:
+                
                 print(f"[{get_timestamp()}] {'='*50}")
-                print(f"[{get_timestamp()}] WARNING: Token timeout detected")
-                print(f"[{get_timestamp()}] Generating new token...")
+                print(f"[{get_timestamp()}] WARNING: Tempo do token expirado!")
+                print(f"[{get_timestamp()}] Gerando um novo token...")
                 print(f"[{get_timestamp()}] {'='*50}")
                 self.has_token = True
                 self.last_token_time = time.time()
                 self.send_token()
 
+    
     def inject_error(self, data: str, probability: float = 0.1) -> str:
         """Aleatoriamente injeta erros nos dados com a probabilidade fornecida"""
+
         if random.random() < probability:
             # troca uma caracter aleatório
             pos = random.randint(0, len(data) - 1)
@@ -287,7 +316,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 2:
-        print("Usage: python Tokentrip.py <config_file>")
+        print("Uso: python Tokentrip.py <config_file>")
         sys.exit(1)
     
     node = TokenRingNode(sys.argv[1])
