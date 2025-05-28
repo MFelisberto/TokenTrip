@@ -70,3 +70,6 @@ The network operates in a ring topology where:
 
 ## Broadcast Messages
 To send a message to all nodes, use "TODOS" as the destination
+
+## 🤝 Author
+[Marcelo Augusto Felisberto Martins](https://github.com/MFelisberto)
