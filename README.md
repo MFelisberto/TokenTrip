@@ -1,24 +1,24 @@
-# Token Ring Network Simulation
+# 💍Token Ring Network Simulation💍
 
 This is a Python implementation of a token ring network simulation that uses UDP for communication between nodes. The program implements a token-based protocol for message transmission in a ring network topology.
 
-## Features
+## Features 🧾
 
 - Token-based message transmission
 - UDP communication between nodes
-- Message queue with maximum size of 10 messages
+- Message queue with maximum size
 - CRC32 error checking
 - Random error injection
 - Support for unicast and broadcast messages
 - Token monitoring and regeneration
 - Configurable node settings
 
-## Requirements
+## Requirements 📕
 
 - Python 3.6 or higher
 - No external dependencies required (uses only standard library)
 
-## Configuration
+## Configuration ⚙
 
 Each node requires a configuration file with the following format:
 
@@ -37,16 +37,13 @@ Bob
 true
 ```
 
-## Usage
+## How to run 🤔💭
 
 1. Create a configuration file for each node in your network
 2. Run the program for each node:
    ```bash
    python Tokentrip.py <config_file>
    ```
-3. Use the following commands in the program:
-   - `send <destination> <message>` - Send a message to a specific destination
-   - `quit` - Exit the program
 
 ## Message Format
 
@@ -61,17 +58,7 @@ The program uses two types of packets:
    ```
    7777:<status>;<origin>;<destination>;<CRC>;<message>
    ```
-
-## Error Handling
-
-The program implements several error handling mechanisms:
-
-- CRC32 error checking
-- Random error injection
-- Token monitoring and regeneration
-- NACK/ACK responses
-- Destination availability checking
-
+   
 ## Network Topology
 
 The network operates in a ring topology where:
@@ -79,11 +66,7 @@ The network operates in a ring topology where:
 - Messages travel clockwise around the ring
 - The token circulates to control message transmission
 - Only one message can be transmitted at a time
-- Messages return to their origin before the token is passed
+- Messages return to their origin before the token is passed (ACK)
 
 ## Broadcast Messages
-
-To send a message to all nodes, use "TODOS" as the destination:
-```
-send TODOS Hello everyone!
-``` 
+To send a message to all nodes, use "TODOS" as the destination
