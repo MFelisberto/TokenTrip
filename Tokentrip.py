@@ -47,6 +47,7 @@ class TokenRingNode:
     
     def load_config(self, config_file: str) -> dict[str, Any]:
         """Carregar config do arquivo"""
+
         with open(config_file, 'r') as f:
             linhas = f.readlines()
             return {
@@ -60,15 +61,6 @@ class TokenRingNode:
     def calculate_crc32(self, data: str) -> str:
         """Calcula o CRC32 para os dados fornecidos"""
         return str(binascii.crc32(data.encode()))
-    
-
-    def inject_error(self, data: str, probability: float = 0.1) -> str:
-        """Aleatoriamente injeta erros nos dados com a probabilidade fornecida"""
-        if random.random() < probability:
-            # troca uma caracter aleatório
-            pos = random.randint(0, len(data) - 1)
-            data = data[:pos] + chr(ord(data[pos]) + 1) + data[pos + 1:]
-        return data
     
 
     def create_data_packet(self, destination: str, message: str) -> str:
@@ -85,109 +77,132 @@ class TokenRingNode:
         return self.inject_error(data)
     
     
-    def parse_data_packet(self, packet: str) -> Tuple[str, str, str, str, str, str]:
-        """Analisar um pacote de dados em seus componentes"""
-        
+    def parse_data_packet(self, packet: str) -> Optional[Tuple[str, str, str, str, str]]:
+        """Analisa um pacote de dados no formato 'DATA:<campo1>;<campo2>;<campo3>;<campo4>;<campo5>'"""
+
         try:
-            parts = packet.split(':')
-            if len(parts) != 2 or parts[0] != DATA_PACKET_VALUE:
-                return None
-            
-            fields = parts[1].split(';')
-            if len(fields) != 5:
-                return None
-                
-            return (fields[0], fields[1], fields[2], fields[3], fields[4])
-        except:
+            prefix, data = packet.split(':', 1)
+            if prefix != DATA_PACKET_VALUE: return None
+
+            campos = data.split(';')
+            if len(campos) != 5: return None
+
+            return tuple(campos)
+        except Exception:
             return None
+
+
     
     def send_token(self):
-        """Send the token to the next node."""
+        """Enviar o token para o próximo node"""
+
         try:
             next_ip, next_port = self.config['next_node'].split(':')
-            time.sleep(3)  # Adiciona um delay de 2 segundos antes de enviar o token
+            
+            time.sleep(3)  # DELAY PARA TESTE
+            
+            # Envia o token
             self.socket.sendto(TOKEN_VALUE.encode(), (next_ip, int(next_port)))
-            self.has_token = False
-            print(f"[{get_timestamp()}] TOKEN: Sent to {next_ip}:{next_port}")
+            self.has_token = False # agora n tenho mais o token
+            
+            print(f"[{get_timestamp()}] TOKEN: Enviado para {next_ip}:{next_port}")
         except Exception as e:
-            print(f"[{get_timestamp()}] ERROR: Failed to send token - {e}")
+            print(f"[{get_timestamp()}] ERROR: Erro ao enviar token - {e}")
     
+
     def handle_token(self):
-        """Handle receiving the token."""
+        """Controle de recebimento do token"""
+
+        # agora tenho o token
+        # tempo vai para 0
         self.has_token = True
         self.last_token_time = time.time()
-        print(f"[{get_timestamp()}] TOKEN: Received")
+        print(f"[{get_timestamp()}] TOKEN: Recebido")
         
         if not self.message_queue.empty():
-            # Get the next message from the queue
-            destination, message = self.message_queue.get()
-            packet = self.create_data_packet(destination, message)
-            self.send_data_packet(packet)
-            # Não envia o token aqui - ele será enviado quando receber o ACK
+            destination, message = self.message_queue.get()          # proximo destino e mensagem
+            packet = self.create_data_packet(destination, message)   # cria o pacote de dados
+            self.send_data_packet(packet)                            # envia o pacote de dados
+            # segura o token até receber o ACK ou NACK
         else:
             # Se não tem mensagem para enviar, passa o token
-            time.sleep(self.config['token_time'])  # Wait for the configured time
-            self.send_token()
+            # espera o tempo do token
+            time.sleep(self.config['token_time'])
+            self.send_token()               
+    
     
     def send_data_packet(self, packet: str):
-        """Send a data packet to the next node."""
+        """Envia um pacote de dados para o próximo node no anel"""
+
         try:
             next_ip, next_port = self.config['next_node'].split(':')
+
+            # Envia o pacote de dados
             self.socket.sendto(packet.encode(), (next_ip, int(next_port)))
-            print(f"[{get_timestamp()}] DATA: Sent to {next_ip}:{next_port}")
+
+            print(f"[{get_timestamp()}] DATA: Enviado para {next_ip}:{next_port}")
         except Exception as e:
-            print(f"[{get_timestamp()}] ERROR: Failed to send data - {e}")
+            print(f"[{get_timestamp()}] ERROR: Falha ao enviar os dados - {e}")
     
     def handle_data_packet(self, packet: str):
-        """Handle receiving a data packet."""
-        parsed = self.parse_data_packet(packet)
-        if not parsed:
-            return
+        """Processa um pacote de dados recebido"""
+
+        parsed = self.parse_data_packet(packet)  # parse do pacote
+        if not parsed: return                    # vazio ou inválido
         
-        status, origin, destination, crc, message = parsed
+        status, origin, destination, crc, message = parsed 
         
-        # If we're the destination
+        # Estamos no destino ou é um broadcast
+        # Verifica se o CRC está correto
+        # atualiza o status do pacote
+        # e envia ACK ou NACK
         if destination == self.config['apelido'] or destination == BROADCAST_DESTINATION:
-            # Recalculate CRC
-            calculated_crc = self.calculate_crc32(message)
-            
-            # Check if there's an error
-            if calculated_crc != crc:
+            calculated_crc = self.calculate_crc32(message) 
+            if calculated_crc != crc:                      
                 status = "NACK"
-                print(f"[{get_timestamp()}] DATA: Error detected in message from {origin}")
+                print(f"[{get_timestamp()}] DATA: Erro detectado na menssagem de {origin}")
             else:
                 status = "ACK"
-                print(f"[{get_timestamp()}] MESSAGE: From {origin}: {message}")
+                print(f"[{get_timestamp()}] MESSAGE: De {origin}: {message}")
             
-            # Atualiza o status no pacote antes de reenviar
             packet = f"{DATA_PACKET_VALUE}:{status};{origin};{destination};{crc};{message}"
         
-        # If we're the origin
+        # Nao estamos no destino, mas recebemos o pacote
+        # se formos nos que enviamos, processamos
+        # senao encaminhamos para o próximo node
         if origin == self.config['apelido']:
+            
             if status == "ACK":
-                print(f"[{get_timestamp()}] MESSAGE: Successfully delivered to {destination}")
+                print(f"[{get_timestamp()}] MESSAGE: Enviada com sucesso para {destination}")    
+                
                 # Só passa o token depois de receber o ACK
                 time.sleep(self.config['token_time'])
                 self.send_token()
+            
             elif status == "NACK":
-                print(f"[{get_timestamp()}] MESSAGE: Needs retransmission to {destination}")
+                print(f"[{get_timestamp()}] MESSAGE: Precisa de retransmissao para {destination}")
+                
                 # Recoloca a mensagem na fila para retransmissão
                 self.message_queue.put((destination, message))
+                
                 # Passa o token para tentar novamente
                 time.sleep(self.config['token_time'])
                 self.send_token()
+            
             elif status == "naoexiste":
-                print(f"[{get_timestamp()}] MESSAGE: Destination {destination} not found")
+                print(f"[{get_timestamp()}] MESSAGE: Destino {destination} nao encontrado")
+                
                 # Passa o token já que o destino não existe
                 time.sleep(self.config['token_time'])
                 self.send_token()
         else:
-            # Forward the packet
+            # Envia o pacote para o proximo node
             self.send_data_packet(packet)
     
     def start(self):
-        """Start the token ring node."""
-        # Start listening for packets
+        """START"""
+
+        # Começa a ouvir pacotes em uma thread separada
         receive_thread = threading.Thread(target=self._receive_loop)
         receive_thread.daemon = True
         receive_thread.start()
@@ -259,6 +274,13 @@ class TokenRingNode:
                 self.last_token_time = time.time()
                 self.send_token()
 
+    def inject_error(self, data: str, probability: float = 0.1) -> str:
+        """Aleatoriamente injeta erros nos dados com a probabilidade fornecida"""
+        if random.random() < probability:
+            # troca uma caracter aleatório
+            pos = random.randint(0, len(data) - 1)
+            data = data[:pos] + chr(ord(data[pos]) + 1) + data[pos + 1:]
+        return data
 
 
 if __name__ == "__main__":
