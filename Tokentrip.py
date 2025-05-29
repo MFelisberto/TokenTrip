@@ -17,7 +17,7 @@ def get_timestamp():
     return datetime.now().strftime("%H:%M:%S")
 
 class TokenRingNode:
-    def __init__(self, config_file: str): 
+    def __init__(self, config_file: str, my_addr: str): 
         """Construtor"""
         # ===== Atributos =====
         self.config = self.load_config(config_file)
@@ -27,7 +27,7 @@ class TokenRingNode:
         # socket -> bind na porta que vem antes da porta do proximo nó
         # supondo que nao estamos usando nada reservado
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(('', self.next_port - 1))
+        self.socket.bind((my_addr.split(':')[0], int(my_addr.split(':')[1])))
 
         self.running = True
         self.has_token = False
@@ -315,9 +315,10 @@ class TokenRingNode:
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 2:
-        print("Uso: python Tokentrip.py <config_file>")
+    if len(sys.argv) != 3:
+        print("Uso: python Tokentrip.py <config_file> <meu_ip:meu_porta>")
         sys.exit(1)
-    
-    node = TokenRingNode(sys.argv[1])
+
+    node = TokenRingNode(sys.argv[1], sys.argv[2])
+
     node.start()
