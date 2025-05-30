@@ -11,6 +11,7 @@ from datetime import datetime
 TOKEN_VALUE = "9000"
 DATA_PACKET_VALUE = "7777"
 MAX_QUEUE_SIZE = 10
+TOKE_TIMEOUT = 100
 BROADCAST_DESTINATION = "TODOS"
 
 def get_timestamp():
@@ -32,7 +33,7 @@ class TokenRingNode:
         self.running = True
         self.has_token = False
         self.last_token_time = 0
-        self.token_timeout = 100
+        self.token_timeout = TOKE_TIMEOUT
         self.token_started = False 
         # =====================
         
@@ -173,14 +174,14 @@ class TokenRingNode:
         if origin == self.config['apelido']:
             
             if status == "ACK":
-                print(f"[{get_timestamp()}] MESSAGE: Enviada com sucesso para {destination}")    
+                print(f"[{get_timestamp()}] MESSAGE ACK: Enviada com sucesso para {destination}")    
                 
                 # Só passa o token depois de receber o ACK
                 time.sleep(self.config['token_time'])
                 self.send_token()
             
             elif status == "NACK":
-                print(f"[{get_timestamp()}] MESSAGE: Precisa de retransmissao para {destination}")
+                print(f"[{get_timestamp()}] MESSAGE NACK: Precisa de retransmissao para {destination}")
                 
                 # Recoloca a mensagem na fila para retransmissão
                 self.message_queue.put((destination, message))
