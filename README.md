@@ -42,7 +42,7 @@ true
 1. Create a configuration file for each node in your network
 2. Run the program for each node:
    ```bash
-   python Tokentrip.py <config_file>
+   python Tokentrip.py <config_file> <ip:port>
    ```
 
 ## Message Format
